@@ -1,0 +1,302 @@
+import React, { useState } from 'react';
+import { Sale } from '../types';
+import { FileText, Download, DollarSign, Package, TrendingUp } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+import { User } from '../types';
+import { AIAnalyzer } from './AIAnalyzer';
+interface Props {
+  sales: Sale[];
+  currentUser: User;
+}
+
+export function Summary({ sales, currentUser }: Props) {
+  const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
+  
+  const visibleSales = currentUser.role === 'admin' 
+    ? sales 
+    : sales.filter(s => s.registradoPor === currentUser.username || (!s.registradoPor && s.vendedor === currentUser.username));
+  const filteredSales = visibleSales.filter(s => s.fecha === fechaFiltro);
+  const granTotal = filteredSales.reduce((acc, sale) => acc + sale.comision, 0);
+  const totalVentasDinero = filteredSales.reduce((acc, sale) => acc + sale.precioTotal, 0);
+  const articulosVendidos = filteredSales.reduce((acc, sale) => acc + sale.cantidad, 0);
+
+  // Group by vendor for the PDF-like view
+  const salesByVendor = filteredSales.reduce((acc, sale) => {
+    if (!acc[sale.vendedor]) acc[sale.vendedor] = [];
+    acc[sale.vendedor].push(sale);
+    return acc;
+  }, {} as Record<string, Sale[]>);
+
+  const chartData = Object.entries(salesByVendor).map(([name, vendorSales]) => ({
+    name,
+    comision: vendorSales.reduce((acc, s) => acc + s.comision, 0)
+  })).sort((a, b) => b.comision - a.comision);
+
+  const exportCSV = () => {
+    if (filteredSales.length === 0) return;
+    
+    const headers = ["Fecha", "Vendedor", "Artículo", "Cantidad", "Precio Unitario", "Precio Total", "Comision"];
+    const rows = filteredSales.map(s => [
+      s.fecha,
+      s.vendedor,
+      `"${s.articulo}"`,
+      s.cantidad,
+      s.precioUnitario.toFixed(2),
+      s.precioTotal.toFixed(2),
+      s.comision.toFixed(2)
+    ]);
+    
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Comisiones_${fechaFiltro}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const printPDF = () => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setTextColor(0, 51, 102);
+    doc.text("REPORTE DE COMISIONES - BLANCOS PRIMAVERA", 105, 15, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Fecha de corte: ${fechaFiltro}`, 105, 25, { align: 'center' });
+    
+    let yPos = 35;
+    
+    Object.entries(salesByVendor).forEach(([vendedor, vendorSales]) => {
+      // Vendor title
+      doc.setFontSize(12);
+      doc.setFillColor(220, 235, 255);
+      doc.rect(14, yPos - 6, 182, 8, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.text(`  VENDEDOR: ${vendedor}`, 15, yPos);
+      yPos += 5;
+      
+      const totalVendor = vendorSales.reduce((acc, s) => acc + s.comision, 0);
+      
+      const tableData = vendorSales.map(s => [
+        s.cantidad.toString(),
+        s.articulo,
+        `$${s.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`,
+        `$${s.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}`
+      ]);
+      
+      tableData.push([
+        '',
+        'TOTAL A PAGAR AL VENDEDOR:',
+        '',
+        `$${totalVendor.toLocaleString('es-MX', {minimumFractionDigits: 2})}`
+      ]);
+      
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Cant.', 'Artículo', 'Venta', 'Comisión']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 20, halign: 'center' },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 35, halign: 'right' },
+          3: { cellWidth: 35, halign: 'right' }
+        },
+        didParseCell: function(data) {
+          if (data.row.index === vendorSales.length) {
+            data.cell.styles.fontStyle = 'bold';
+            if (data.column.index === 3) {
+              data.cell.styles.fillColor = [200, 255, 200];
+            }
+          }
+        }
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+      
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+    });
+    
+    // Grand total
+    if (yPos > 270) {
+      doc.addPage();
+      yPos = 20;
+    }
+    
+    doc.setFontSize(14);
+    doc.setFillColor(255, 220, 220);
+    doc.rect(14, yPos - 6, 182, 12, 'F');
+    doc.text(`GRAN TOTAL A REPARTIR HOY: $${granTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`, 105, yPos + 2, { align: 'center' });
+
+    doc.save(`Comisiones_${fechaFiltro}.pdf`);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto pb-10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-10 gap-6 print:hidden">
+        <div>
+          <h2 className="text-3xl font-serif tracking-wide text-zinc-100">Resumen Financiero</h2>
+          <p className="text-zinc-500 mt-2 font-medium">Visualiza las métricas y comisiones de un día específico.</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.2em]">Fecha</label>
+          <input 
+            type="date" 
+            value={fechaFiltro}
+            onChange={e => setFechaFiltro(e.target.value)}
+            onClick={e => {
+              try {
+                if ('showPicker' in HTMLInputElement.prototype) {
+                  (e.target as HTMLInputElement).showPicker();
+                }
+              } catch (err) {
+                // Ignore if it fails or is not supported
+              }
+            }}
+            className="bg-transparent border-b border-white/20 px-2 py-2 outline-none focus:border-white transition-colors text-zinc-100 font-medium cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+          />
+        </div>
+      </div>
+
+      {filteredSales.length === 0 ? (
+        <div className="py-20 border-t border-white/10 text-center text-zinc-500 font-medium print:hidden">
+          No hay ventas registradas para el {fechaFiltro}.
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {/* Key Metrics Dashboard */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-8 md:gap-y-0 border-y border-white/10 py-8 print:hidden">
+            <div className="md:border-r border-white/10 px-4">
+              <div className="flex items-center gap-3 mb-4">
+                <DollarSign className="text-zinc-400" size={18} />
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.2em]">A Repartir</p>
+              </div>
+              <p className="text-4xl font-serif text-zinc-100 tracking-tight">${granTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+            </div>
+            
+            <div className="md:border-r border-white/10 px-4">
+              <div className="flex items-center gap-3 mb-4">
+                <Package className="text-zinc-400" size={18} />
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.2em]">Volumen</p>
+              </div>
+              <p className="text-4xl font-serif text-zinc-100 tracking-tight">{articulosVendidos} <span className="text-xl text-zinc-500">uds</span></p>
+            </div>
+
+            <div className="px-4">
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="text-zinc-400" size={18} />
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.2em]">Ingreso Bruto</p>
+              </div>
+              <p className="text-4xl font-serif text-zinc-100 tracking-tight">${totalVentasDinero.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+            </div>
+          </div>
+
+          <div className="print:hidden">
+            <h3 className="text-[11px] font-semibold text-zinc-500 mb-8 uppercase tracking-[0.2em]">Desglose por Vendedor</h3>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 11}} dy={10} />
+                  <YAxis hide />
+                  <Tooltip 
+                    cursor={{fill: '#18181b'}}
+                    contentStyle={{backgroundColor: '#09090b', borderColor: '#27272a', color: '#fafafa', borderRadius: '8px'}}
+                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Comisión']}
+                  />
+                  <Bar dataKey="comision" radius={[2, 2, 0, 0]}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index === 0 ? '#fafafa' : '#52525b'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-4 border-t border-white/10 print:hidden">
+            <button 
+              onClick={exportCSV}
+              className="flex items-center gap-2 bg-transparent border border-white/20 hover:border-white/40 text-zinc-300 px-6 py-2.5 rounded-full text-[11px] font-semibold uppercase tracking-wider transition-colors"
+            >
+              <Download size={14} /> CSV
+            </button>
+            <button 
+              onClick={printPDF}
+              className="flex items-center gap-2 bg-zinc-100 hover:bg-white text-black px-6 py-2.5 rounded-full text-[11px] font-semibold uppercase tracking-wider transition-colors"
+            >
+              <FileText size={14} /> Guardar PDF
+            </button>
+          </div>
+
+          <AIAnalyzer sales={filteredSales} fecha={fechaFiltro} />
+          {/* Reporte Estructurado */}
+          <div className="pt-12 print:pt-0">
+            <div className="mb-12">
+              <h1 className="text-3xl font-serif tracking-tight text-zinc-100">Reporte de Comisiones</h1>
+              <p className="text-zinc-500 text-sm mt-2">Blancos Primavera • {fechaFiltro} {currentUser.role === 'seller' && `• ${currentUser.username}`}</p>
+            </div>
+
+            <div className="space-y-16">
+              {Object.entries(salesByVendor).map(([vendedor, vendorSales]) => {
+                const totalVendor = vendorSales.reduce((acc, s) => acc + s.comision, 0);
+                return (
+                  <div key={vendedor}>
+                    <h3 className="text-xl font-serif text-zinc-100 mb-6 border-b border-white/10 pb-2">{vendedor}</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                          <tr className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] border-b border-white/5">
+                            <th className="py-3 pr-4 font-semibold w-16">Cant</th>
+                            <th className="py-3 px-4 font-semibold">Artículo</th>
+                            <th className="py-3 px-4 font-semibold text-right">Venta</th>
+                            <th className="py-3 pl-4 font-semibold text-right">Comisión</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {vendorSales.map((s, i) => (
+                            <tr key={i} className="hover:bg-white/5 transition-colors group">
+                              <td className="py-4 pr-4 text-zinc-400">{s.cantidad}</td>
+                              <td className="py-4 px-4 text-zinc-300 group-hover:text-zinc-100 transition-colors">{s.articulo}</td>
+                              <td className="py-4 px-4 text-right text-zinc-400">${s.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                              <td className="py-4 pl-4 text-right font-medium text-zinc-200">${s.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-transparent border-t border-white/10">
+                            <td colSpan={3} className="py-6 px-4 text-right font-semibold text-zinc-500 uppercase tracking-widest text-[10px]">Total a pagar</td>
+                            <td className="py-6 pl-4 text-right font-serif text-xl text-zinc-100">
+                              ${totalVendor.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-20 border-t-2 border-white/10 pt-10 text-right">
+              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] mb-2">Gran Total a Repartir</p>
+              <h2 className="text-5xl font-serif tracking-tight text-zinc-100">
+                ${granTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+              </h2>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

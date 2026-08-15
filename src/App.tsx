@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from './hooks/useData';
+import { useUsers } from './hooks/useUsers';
 import { Tabs } from './components/Tabs';
 import { RegisterSale } from './components/RegisterSale';
 import { Summary } from './components/Summary';
 import { EditSales } from './components/EditSales';
 import { CatalogManager } from './components/CatalogManager';
+import { UserManager } from './components/UserManager';
 import { Login } from './components/Login';
+import { Toast, ToastType } from './components/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from './types';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { catalog, sales, isLoaded, addSale, deleteSale, saveCatalog, updateSale, resetCatalog } = useData(currentUser);
+  const { users, isUsersLoaded, addUser, updateUser, deleteUser } = useUsers();
   const [activeTab, setActiveTab] = useState('register');
   const [debugLog, setDebugLog] = useState<string>('');
+  
+  // Toast state
+  const [toast, setToast] = useState<{ id: number; message: string; type: ToastType } | null>(null);
+  
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToast({ id: Date.now(), message, type });
+  };
 
   useEffect(() => {
     const originalError = console.error;
@@ -32,7 +43,7 @@ export default function App() {
     }
   }, []);
 
-  if (currentUser && !isLoaded) {
+  if (!isUsersLoaded || (currentUser && !isLoaded)) {
     return (
       <div className="min-h-screen bg-[#030303] flex flex-col items-center justify-center p-4">
         <div className="text-zinc-600 tracking-widest uppercase text-[10px] mb-4">Iniciando...</div>
@@ -42,7 +53,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <Login onLogin={setCurrentUser} />;
+    return <Login onLogin={setCurrentUser} users={users} />;
   }
 
   return (
@@ -60,14 +71,26 @@ export default function App() {
               transition={{ duration: 0.3, ease: "easeInOut" }}
               className="h-full"
             >
-              {activeTab === 'register' && <RegisterSale catalog={catalog} addSale={addSale} currentUser={currentUser} />}
+              {activeTab === 'register' && <RegisterSale catalog={catalog} users={users} addSale={addSale} currentUser={currentUser} showToast={showToast} />}
               {activeTab === 'summary' && <Summary sales={sales} currentUser={currentUser} />}
-              {activeTab === 'edit' && <EditSales sales={sales} deleteSale={deleteSale} updateSale={updateSale} currentUser={currentUser} />}
-              {activeTab === 'catalog' && currentUser.role === 'admin' && <CatalogManager catalog={catalog} saveCatalog={saveCatalog} resetCatalog={resetCatalog} />}
+              {activeTab === 'edit' && <EditSales sales={sales} users={users} deleteSale={deleteSale} updateSale={updateSale} currentUser={currentUser} showToast={showToast} />}
+              {activeTab === 'catalog' && <CatalogManager catalog={catalog} saveCatalog={saveCatalog} resetCatalog={resetCatalog} currentUser={currentUser} />}
+              {activeTab === 'users' && currentUser.role === 'admin' && <UserManager users={users} addUser={addUser} updateUser={updateUser} deleteUser={deleteUser} currentUser={currentUser} showToast={showToast} />}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
+
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

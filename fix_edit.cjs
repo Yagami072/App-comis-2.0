@@ -1,125 +1,7 @@
-import React, { useState } from 'react';
-import { Sale } from '../types';
-import { Trash2, Edit2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+const fs = require('fs');
+let code = fs.readFileSync('src/components/EditSales.tsx', 'utf8');
 
-import { User } from '../types';
-import { ToastType } from './Toast';
-interface Props {
-  sales: Sale[];
-  users: User[];
-  currentUser: User;
-  deleteSale: (id: string) => void;
-  updateSale: (id: string, updatedSale: Sale) => void;
-  showToast?: (message: string, type?: ToastType) => void;
-}
-
-export function EditSales({ sales, users, deleteSale, updateSale, currentUser, showToast }: Props) {
-  const sellerUsers = users.filter(u => u.role === 'seller').map(u => u.username);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
-  
-  // Edit state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Sale>>({});
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  
-  const visibleSales = currentUser.role === 'admin' 
-    ? sales 
-    : sales.filter(s => s.registradoPor === currentUser.username || (!s.registradoPor && s.vendedor === currentUser.username));
-  const filteredSales = visibleSales
-    .filter(s => 
-       s.vendedor.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       s.fecha.includes(searchTerm) ||
-      s.articulo.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-
-  const totalPages = Math.max(1, Math.ceil(filteredSales.length / itemsPerPage));
-  const currentSales = filteredSales.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const startEdit = (sale: Sale) => {
-    setEditingId(sale.id);
-    setEditForm({ ...sale });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm({});
-  };
-
-  const saveEdit = () => {
-    if (editingId !== null && editForm.fecha && editForm.vendedor && editForm.articulo) {
-      const originalSale = sales.find(s => s.id === editingId);
-      if (originalSale) {
-        updateSale(editingId, {
-          ...originalSale,
-          fecha: editForm.fecha,
-          vendedor: editForm.vendedor,
-          articulo: editForm.articulo,
-          cantidad: Number(editForm.cantidad) || 0,
-          precioTotal: Number(editForm.precioTotal) || 0,
-          tipoComision: editForm.tipoComision || 'Porcentaje',
-          valorAplicado: Number(editForm.valorAplicado) || 0,
-          comision: Number(editForm.comision) || 0
-        });
-      }
-      setEditingId(null);
-      setEditForm({});
-    } else {
-      alert("No se pudo guardar: verifica que Fecha, Vendedor y Artículo no estén vacíos.");
-    }
-  };
-
-  const handleEditChange = (field: keyof Sale, value: string | number) => {
-    setEditForm(prev => {
-      const next = { ...prev, [field]: value };
-      
-      if (field === 'precioTotal' || field === 'cantidad') {
-        const tipo = next.tipoComision || 'Porcentaje';
-        const valor = Number(next.valorAplicado) || 0;
-        
-        if (tipo === 'Porcentaje') {
-          next.comision = (Number(next.precioTotal) || 0) * valor;
-        } else if (tipo === 'Monto Fijo') {
-          next.comision = (Number(next.cantidad) || 0) * valor;
-        }
-      }
-      
-      return next;
-    });
-  };
-
-  if (sales.length === 0) {
-    return (
-      <div className="max-w-5xl mx-auto pb-10">
-        <h2 className="text-3xl font-serif tracking-wide text-zinc-100 mb-8">Historial de Ventas</h2>
-        <div className="py-20 border-t border-white/10 text-center text-zinc-500 font-medium">
-          Aún no hay ventas registradas.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-5xl mx-auto pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-10 gap-6">
-        <div>
-          <h2 className="text-3xl font-serif tracking-wide text-zinc-100">Historial de Ventas</h2>
-          <p className="text-zinc-500 mt-2 font-medium">Administra y edita los registros históricos.</p>
-        </div>
-        <div className="w-full sm:w-72">
-          <input 
-            type="text" 
-            placeholder="Buscar por vendedor, artículo o fecha..."
-            value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            className="w-full bg-transparent border-b border-white/20 py-2 focus:border-white focus:outline-none transition-all text-zinc-100 text-sm"
-          />
-        </div>
-      </div>
-
-      
+const replacement = `
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm text-left whitespace-nowrap">
           <thead>
@@ -134,7 +16,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {currentSales.map((sale) => (
+            {filteredSales.map((sale) => (
               <tr key={sale.id} className="hover:bg-white/5 transition-colors group">
                 {editingId === sale.id ? (
                   <>
@@ -157,7 +39,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                     </td>
                     <td className="py-2 px-4">
                       {currentUser.role === 'seller' ? <div className="py-1 text-zinc-400 text-sm">{editForm.vendedor}</div> : <select value={editForm.vendedor} onChange={e => handleEditChange('vendedor', e.target.value)} className="w-full bg-transparent border-b border-white/20 py-1 focus:outline-none text-zinc-100 text-sm">
-                        {sellerUsers.map(v => <option key={v} value={v} className="bg-[#111]">{v}</option>)}
+                        {VENDEDORES.map(v => <option key={v} value={v} className="bg-[#111]">{v}</option>)}
                       </select>}
                     </td>
                     <td className="py-2 px-4">
@@ -170,7 +52,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                       <input type="number" step="0.01" value={editForm.precioTotal} onChange={e => handleEditChange('precioTotal', Number(e.target.value))} className="w-24 bg-transparent border-b border-white/20 py-1 focus:outline-none text-zinc-100 text-sm text-right" />
                     </td>
                     <td className="py-2 px-4 text-right text-zinc-400">
-                      ${editForm.comision?.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                      \${editForm.comision?.toLocaleString('es-MX', {minimumFractionDigits: 2})}
                     </td>
                     <td className="py-2 px-4">
                       <div className="flex items-center justify-center gap-3">
@@ -185,8 +67,8 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                     <td className="py-4 px-4 text-zinc-100">{sale.vendedor}</td>
                     <td className="py-4 px-4 text-zinc-300 group-hover:text-zinc-100 transition-colors">{sale.articulo}</td>
                     <td className="py-4 px-4 text-center text-zinc-400">{sale.cantidad}</td>
-                    <td className="py-4 px-4 text-right text-zinc-300">${sale.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
-                    <td className="py-4 px-4 text-right font-medium text-zinc-200">${sale.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td className="py-4 px-4 text-right text-zinc-300">\${sale.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td className="py-4 px-4 text-right font-medium text-zinc-200">\${sale.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => startEdit(sale)} className="text-zinc-500 hover:text-white p-1 transition-colors" title="Editar">
@@ -214,7 +96,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
       </div>
 
       <div className="md:hidden space-y-4">
-        {currentSales.map((sale) => (
+        {filteredSales.map((sale) => (
           <div key={sale.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden">
             {editingId === sale.id ? (
               <div className="space-y-4">
@@ -234,7 +116,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                   <div>
                     <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Vendedor</label>
                     {currentUser.role === 'seller' ? <div className="py-1 text-zinc-400 text-sm">{editForm.vendedor}</div> : <select value={editForm.vendedor} onChange={e => handleEditChange('vendedor', e.target.value)} className="w-full bg-transparent border-b border-white/20 py-1 focus:outline-none text-zinc-100 text-sm">
-                      {sellerUsers.map(v => <option key={v} value={v} className="bg-[#111]">{v}</option>)}
+                      {VENDEDORES.map(v => <option key={v} value={v} className="bg-[#111]">{v}</option>)}
                     </select>}
                   </div>
                 </div>
@@ -256,7 +138,7 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                 </div>
                 <div className="pt-2 border-t border-white/10 text-right">
                   <span className="text-[10px] uppercase text-zinc-500 mr-2">Nueva Comisión:</span>
-                  <span className="text-emerald-400 font-medium">${editForm.comision?.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                  <span className="text-emerald-400 font-medium">\${editForm.comision?.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
                 </div>
               </div>
             ) : (
@@ -282,46 +164,19 @@ export function EditSales({ sales, users, deleteSale, updateSale, currentUser, s
                 <div className="flex justify-between items-center border-t border-white/10 pt-3">
                   <div className="text-zinc-400 text-xs flex gap-3">
                     <span><span className="text-zinc-500">Cant:</span> {sale.cantidad}</span>
-                    <span><span className="text-zinc-500">Venta:</span> ${sale.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                    <span><span className="text-zinc-500">Venta:</span> \${sale.precioTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
                   </div>
                   <div className="text-emerald-400 font-medium text-sm text-right">
-                    Com: ${sale.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                    Com: \${sale.comision.toLocaleString('es-MX', {minimumFractionDigits: 2})}
                   </div>
                 </div>
               </>
             )}
           </div>
         ))}
-      
-      </div>
-      
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-8 border-t border-white/10 pt-6">
-          <p className="text-zinc-500 text-xs">
-            Mostrando <span className="text-zinc-300">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-zinc-300">{Math.min(currentPage * itemsPerPage, filteredSales.length)}</span> de <span className="text-zinc-300">{filteredSales.length}</span> registros
-          </p>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-2 rounded-full bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-all"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-xs font-medium text-zinc-300 px-2">
-              Pág. {currentPage} de {totalPages}
-            </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2 rounded-full bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-all"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+      </div>`;
+
+// Replace the overflow-x-auto div
+code = code.replace(/<div className="overflow-x-auto">[\s\S]*?<\/table>\s*<\/div>/, replacement);
+
+fs.writeFileSync('src/components/EditSales.tsx', code);

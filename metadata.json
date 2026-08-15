@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Blancos Primavera",
+  "description": "Sistema de gestión de ventas y comisiones para Blancos Primavera",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

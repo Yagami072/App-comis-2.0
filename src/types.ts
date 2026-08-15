@@ -86,7 +86,7 @@ export interface User {
   role: UserRole;
   pin: string;
 }
-export const USERS: User[] = [
+export const INITIAL_USERS: User[] = [
   { username: 'QUEEN', role: 'admin', pin: 'Primavera2026' },
   { username: 'PACO', role: 'seller', pin: '1234' },
   { username: 'YAEL', role: 'seller', pin: '1234' },

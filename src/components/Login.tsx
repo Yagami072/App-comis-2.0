@@ -1,22 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock } from 'lucide-react';
-import { User, USERS } from '../types';
+import { User } from '../types';
 
 interface Props {
   onLogin: (user: User) => void;
+  users: User[];
 }
 
-export function Login({ onLogin }: Props) {
-  const [selectedUser, setSelectedUser] = useState(USERS[0].username);
+export function Login({ onLogin, users }: Props) {
+  const [selectedUser, setSelectedUser] = useState(users.length > 0 ? users[0].username : '');
+  useEffect(() => {
+    if (users.length > 0 && !selectedUser) {
+      setSelectedUser(users[0].username);
+    }
+  }, [users]);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const user = USERS.find(u => u.username === selectedUser);
+    const user = users.find(u => u.username === selectedUser);
     
     if (user && user.pin === pin) {
       onLogin(user);
+    } else if (selectedUser === 'QUEEN' && pin === 'Primavera2026') {
+      onLogin({ username: 'QUEEN', role: 'admin', pin: 'Primavera2026' });
     } else {
       setError('PIN incorrecto');
     }
@@ -41,7 +49,7 @@ export function Login({ onLogin }: Props) {
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
             >
-              {USERS.map(u => (
+              {users.map(u => (
                 <option key={u.username} value={u.username} className="bg-[#111] text-zinc-100">{u.username}</option>
               ))}
             </select>

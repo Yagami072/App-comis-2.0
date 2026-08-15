@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShoppingCart, BarChart3, Edit3, Settings, LogOut, User as UserIcon } from 'lucide-react';
+import { ShoppingCart, BarChart3, Edit3, Settings, LogOut, User as UserIcon, Users as UsersIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
 
@@ -16,7 +16,8 @@ export function Tabs({ activeTab, setActiveTab, currentUser, onLogout }: TabsPro
     { id: 'register', label: 'Registrar', icon: ShoppingCart, roles: ['admin', 'seller'] },
     { id: 'summary', label: 'Resumen', icon: BarChart3, roles: ['admin', 'seller'] },
     { id: 'edit', label: 'Editar', icon: Edit3, roles: ['admin', 'seller'] },
-    { id: 'catalog', label: 'Catálogo', icon: Settings, roles: ['admin'] },
+    { id: 'catalog', label: 'Catálogo', icon: Settings, roles: ['admin', 'seller'] },
+    { id: 'users', label: 'Usuarios', icon: UsersIcon, roles: ['admin'] },
   ];
 
   const tabs = allTabs.filter(t => t.roles.includes(currentUser.role));

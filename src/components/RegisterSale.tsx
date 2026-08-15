@@ -1,16 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
-import { CatalogItem, Sale, VENDEDORES, User } from '../types';
+import { CatalogItem, Sale, User } from '../types';
+
+import { ToastType } from './Toast';
 
 interface Props {
   catalog: CatalogItem[];
+  users: User[];
   addSale: (sale: Sale) => void;
   currentUser: User;
+  showToast?: (message: string, type?: ToastType) => void;
 }
 
-export function RegisterSale({ catalog, addSale, currentUser }: Props) {
+export function RegisterSale({ catalog, users, addSale, currentUser, showToast }: Props) {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [vendedor, setVendedor] = useState(currentUser.role === 'seller' ? currentUser.username : VENDEDORES[0]);
+  
+  // Get sellers only
+  const sellerUsers = users.filter(u => u.role === 'seller').map(u => u.username);
+  const defaultSeller = sellerUsers.length > 0 ? sellerUsers[0] : '';
+  const [vendedor, setVendedor] = useState(currentUser.role === 'seller' ? currentUser.username : defaultSeller);
   const [articuloId, setArticuloId] = useState(catalog[0]?.id || '');
   const [cantidad, setCantidad] = useState(1);
   const [precioUnitario, setPrecioUnitario] = useState<number | ''>('');
@@ -71,6 +79,7 @@ export function RegisterSale({ catalog, addSale, currentUser }: Props) {
     };
 
     addSale(newSale);
+    if (showToast) showToast('Venta registrada exitosamente', 'success');
     
     setCantidad(1);
     setPrecioUnitario('');
@@ -119,7 +128,7 @@ export function RegisterSale({ catalog, addSale, currentUser }: Props) {
               value={vendedor}
               onChange={(e) => setVendedor(e.target.value)}
             >
-              {VENDEDORES.map(v => (
+              {sellerUsers.map(v => (
                 <option key={v} value={v} className="bg-[#111] text-zinc-100">{v}</option>
               ))}
             </select>

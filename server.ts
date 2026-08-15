@@ -23,12 +23,12 @@ async function startServer() {
         }
       });
       
-      const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: prompt
+      const response = await ai.interactions.create({
+        model: "gemini-3.7-flash",
+        input: prompt
       });
       
-      res.json({ text: response.text });
+      res.json({ text: response.output_text });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: error.message });
@@ -45,7 +45,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
